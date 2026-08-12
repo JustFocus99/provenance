@@ -4,11 +4,13 @@ import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.server.handler.HandlerList
 import org.slf4j.LoggerFactory
 
-abstract class BasicApp(port: Int) {
+abstract class BasicApp(val port: Int) {
     private val logger = LoggerFactory.getLogger(javaClass)
-    private val server: Server
+    private lateinit var server: Server
 
-    init {
+    protected abstract fun handlerList(): HandlerList
+
+    open fun start() {
         val list = this.handlerList()
         server = Server(port)
         server.handler = list
@@ -23,11 +25,7 @@ abstract class BasicApp(port: Int) {
                 logger.info("Error shutting down app.", e)
             }
         })
-    }
 
-    protected abstract fun handlerList(): HandlerList
-
-    open fun start() {
         logger.info("App started.")
         server.start()
     }

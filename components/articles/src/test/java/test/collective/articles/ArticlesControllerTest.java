@@ -1,5 +1,6 @@
 package test.collective.articles;
 
+import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.collective.articles.ArticleDataGateway;
@@ -14,24 +15,34 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.*;
 
 public class ArticlesControllerTest {
-    private ArticleDataGateway gateway = new ArticleDataGateway(List.of(
-            new ArticleRecord(10101, "Programming Languages InfoQ Trends Report - October 2019 4", true),
-            new ArticleRecord(10102, "Single Page Applications and ASP.NET Core 3.0 2", false),
-            new ArticleRecord(10103, "Google Open-Sources ALBERT Natural Language Model", true),
-            new ArticleRecord(10104, "Ahead of re:Invent, Amazon Updates AWS Lambda", false),
-            new ArticleRecord(10105, "Electron Desktop JavaScript Framework Finds a New Home", true),
-            new ArticleRecord(10106, "Ryan Kitchens on Learning from Incidents at Netflix, the Role of SRE, and Sociotechnical Systems", true)
-    ));
+    MetricRegistry registry = new MetricRegistry();
+    ArticleDataGateway gateway = new ArticleDataGateway(registry);
+    ArticleDataGateway spy = spy(gateway);
+
+    @Before
+    public void before() {
+
+        ArticleDataGateway.articles = Arrays.asList(
+                new ArticleRecord(10101, "Programming Languages InfoQ Trends Report - October 2019 4", true),
+                new ArticleRecord(10102, "Single Page Applications and ASP.NET Core 3.0 2", false),
+                new ArticleRecord(10103, "Google Open-Sources ALBERT Natural Language Model", true),
+                new ArticleRecord(10104, "Ahead of re:Invent, Amazon Updates AWS Lambda", false),
+                new ArticleRecord(10105, "Electron Desktop JavaScript Framework Finds a New Home", true),
+                new ArticleRecord(10106, "Ryan Kitchens on Learning from Incidents at Netflix, the Role of SRE, and Sociotechnical Systems", true)
+        );
+    }
 
     BasicApp app = new BasicApp(8888) {
         protected HandlerList handlerList() {
             HandlerList list = new HandlerList();
-            list.addHandler(new ArticlesController(new ObjectMapper(), gateway));
+            list.addHandler(new ArticlesController(new ObjectMapper(), spy, registry));
             return list;
         }
     };
@@ -53,6 +64,8 @@ public class ArticlesControllerTest {
         List<ArticleInfo> entries = new ObjectMapper().readValue(response, new TypeReference<List<ArticleInfo>>() {
         });
         assertEquals(6, entries.size());
+
+        verify(spy, atMostOnce()).findAll();
     }
 
     @Test
@@ -62,5 +75,7 @@ public class ArticlesControllerTest {
         List<ArticleInfo> entries = new ObjectMapper().readValue(response, new TypeReference<List<ArticleInfo>>() {
         });
         assertEquals(4, entries.size());
+
+        verify(spy, atMostOnce()).findAll();
     }
 }

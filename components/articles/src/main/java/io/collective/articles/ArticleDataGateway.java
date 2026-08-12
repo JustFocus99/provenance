@@ -1,22 +1,27 @@
 package io.collective.articles;
 
+import com.codahale.metrics.CachedGauge;
+import com.codahale.metrics.MetricRegistry;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.emptyList;
-
 public class ArticleDataGateway {
-    private final List<ArticleRecord> articles = new ArrayList<>();
-    private final Random sequence = new Random();
+    public static List<ArticleRecord> articles = new ArrayList<>();
 
-    public ArticleDataGateway() {
-        this(emptyList());
-    }
+    private Random sequence = new Random();
 
-    public ArticleDataGateway(List<ArticleRecord> initialRecords) {
-        articles.addAll(initialRecords);
+    public ArticleDataGateway(MetricRegistry registry) {
+        registry.register("articles",
+                new CachedGauge<Integer>(10, TimeUnit.MINUTES) {
+                    @Override
+                    protected Integer loadValue() {
+                        return articles.size();
+                    }
+                });
     }
 
     public List<ArticleRecord> findAll() {
@@ -27,11 +32,7 @@ public class ArticleDataGateway {
         return articles.stream().filter(ArticleRecord::isAvailable).collect(Collectors.toList());
     }
 
-    public void save(String title) {
-        articles.add(new ArticleRecord(sequence.nextInt(), title, true));
-    }
-
-    public void clear() {
-        articles.clear();
+    public void save(ArticleInfo info) {
+        articles.add(new ArticleRecord(sequence.nextInt(), info.getTitle(), true));
     }
 }

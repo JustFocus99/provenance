@@ -1,115 +1,133 @@
 # Provenance
 
-A common architecture used for data collection.
+Provenance is a small service that periodically polls an RSS feed, ingests the articles it finds, and exposes them
+over a JSON API — instrumented end-to-end with Dropwizard metrics so the pipeline can be observed in Prometheus and
+Grafana.
 
-Provenance collects and stores articles from [infoq.com](https://www.infoq.com/) and follows a
-Netflix [Conductor-esque](https://netflix.github.io/conductor/) architecture.
+### How it works
 
-### History
-
-In 2016 we began a project to address some of the concerns around fake news. While most were analyzing articles, we
-decided to take another approach; showing consumers where their content comes from. Our goal was to bring
-source [journalist] context to the foreground.
-
-### The exercise
-
-Get the tests to pass!
-
-- Query the articles gateway.
-- Map rss results to a collection.
-- Start the background worker.
-
-Look for todo items in the codebase for where to get started.
-
-### Quick start
-
-Download the codebase.
-
-Create a jar file without running tests.
-
-```bash
-./gradlew assemble
-```
-
-### Articles
-
-Run the articles component tests to see what's failing.
-
-```bash
-./gradlew :components:articles:test
-```
-
-Review the *todo* comments in the `ArticlesController` class and get the tests to pass. Along the way it will be helpful
-to use the `writeJsonBody` method to convert articles to json.
-
-```java
-writeJsonBody(servletResponse, articles);
-```
+- **`EndpointWorkFinder` / `EndpointWorker`** (`components/endpoints`) — on a schedule, the work finder looks up
+  ready endpoints (currently the InfoQ RSS feed, `https://feed.infoq.com/`) and the worker fetches each one, parses
+  the RSS/XML response, and saves the resulting articles.
+- **`ArticleDataGateway` / `ArticlesController`** (`components/articles`) — holds the ingested articles in memory and
+  serves them over HTTP.
+- **`WorkScheduler`** (`components/workflow-support`) — drives the polling loop on a fixed interval.
+- **`BasicApp` / `BasicHandler` / `RestTemplate`** (`components/rest-support`) — small Kotlin foundation the app is
+  built on: an embedded Jetty server, a handler base class for JSON endpoints, and an HTTP client used to call out to
+  the RSS feed.
+- **`MetricsController` / `HealthCheck`** (`components/metrics-support`) — exposes Dropwizard metrics to Prometheus
+  and a basic health check.
 
 ### Endpoints
 
-Run the endpoints component tests to see what's failing.
+| Method | Path         | Description                              |
+|--------|--------------|-------------------------------------------|
+| GET    | `/articles`  | All ingested articles                     |
+| GET    | `/available` | Articles currently marked as available    |
+| GET    | `/metrics`   | Prometheus-formatted metrics              |
+| GET    | `/health`    | Health check                              |
+
+### Quick start
+
+Build the project:
 
 ```bash
-./gradlew :components:endpoints:test  
+./gradlew clean build
 ```
 
-Review the *todo* comments in the EndpointWorker class and get the tests to pass. Along the way it will be helpful to
-use `XmlMapper` to convert RSS feeds to Java objects.
-
-```java
-RSS rss = new XmlMapper().readValue(response, RSS.class);
-```
-
-### Test suite
-
-Ensure all the tests pass.
+Run the server:
 
 ```bash
-./gradlew build
+java -jar applications/provenance-server/build/libs/provenance-server-1.0-SNAPSHOT.jar
 ```
 
-### Schedule work
-
-Review *todo* comments in the `App` class within the provenance-server component. Create and start a `WorkScheduler`.
-
-```java
-WorkScheduler<EndpointTask> scheduler = new WorkScheduler<>(finder, workers, 300);
-``` 
-
-_Pro tip:_ review the `testScheduler` test in the `WorkSchedulerTest` class.
-
-### Run locally
-
-Build the application again then run it locally to ensure that the endpoint worker is collecting articles.
+The server listens on port `8881` by default (override with the `PORT` environment variable). Once started, the
+endpoint worker will poll the configured RSS feed every 300 seconds and populate `/articles` and `/available`.
 
 ```bash
-./gradlew build
-java -jar applications/provenance-server/build/libs/provenance-server-1.0-SNAPSHOT.jar 
+curl http://localhost:8881/articles
 ```
 
-Make a request for all articles in another terminal window.
+### Metrics: Prometheus
+
+We use [Prometheus](https://prometheus.io/) to store metrics emitted by the service, including request rates
+(`article-requests`, `article-available-requests`) and the current article count.
+
+Install Prometheus and point it at the app's metrics endpoint.
 
 ```bash
-curl -H "Accept: application/json" http://localhost:8881/articles
+brew install prometheus
 ```
 
-## Run with Docker
+Modify `/usr/local/etc/prometheus.yml` to match the example below (for Homebrew on Apple Silicon, use
+`/opt/homebrew/etc/prometheus.yml`).
 
-1. Build with Docker.
-   ```bash
-    docker build -t provenance-server . --platform linux/amd64
-    ```
+```yaml
+  - job_name: 'dropwizard'
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+    scheme: http
+    static_configs:
+      - targets: [ 'localhost:8881' ]
+```
 
-1. Run with Docker.
-   ```bash
-   docker run -p 8881:8881 provenance-server
-   ```
+Restart Prometheus.
 
-Hope you enjoy the exercise!
+```bash
+brew services restart prometheus
+```
 
-Thanks,
+Upon success, you should see the Dropwizard endpoint `http://localhost:8881/metrics` **UP** on the Prometheus
+[Status Targets](http://localhost:9090/targets) page.
 
-The IC Team
+![Prometheus target](docs/images/prometheus.png)
+
+### Metrics: Grafana
+
+We use [Grafana](https://grafana.com/) to query, visualize, and alert on the metrics stored in Prometheus.
+
+Install and run Grafana.
+
+```bash
+brew install grafana
+brew services restart grafana
+```
+
+Use the [web application](http://localhost:3000) to configure a Prometheus data source.
+
+![Prometheus data source](docs/images/data-source.png)
+
+Add the data source at `http://localhost:3000/datasources/new`, using `http://localhost:9090` as the Prometheus URL.
+
+Create a new dashboard and graph the `article_requests_total` metric. Use the query below to display requests per
+second.
+
+```
+irate(article_requests_total[5m])
+```
+
+![Grafana query](docs/images/query.png)
+
+Drive traffic to the articles endpoint to generate data for the dashboard:
+
+```bash
+while [ true ]; do for i in {1..10}; do curl -v -H "Accept: application/json" http://localhost:8881/articles; done; sleep 5; done
+```
+
+Your dashboard should start recording data.
+
+![Grafana dashboard](docs/images/dashboard.png)
+
+### Project layout
+
+```
+applications/provenance-server   # entry point, wires everything together
+components/articles              # article storage and HTTP endpoints
+components/endpoints              # RSS endpoint polling: work finder, worker, task
+components/rss-support           # RSS/XML data model
+components/workflow-support       # generic scheduled work-finder/worker framework
+components/rest-support          # embedded Jetty app + handler base class + HTTP client
+components/metrics-support       # Prometheus metrics endpoint + health check
+```
 
 © 2022 by Initial Capacity, Inc. All rights reserved.

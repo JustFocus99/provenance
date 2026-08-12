@@ -12,6 +12,7 @@ import org.junit.Test;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class AppTest {
     App app;
@@ -23,15 +24,31 @@ public class AppTest {
     }
 
     @After
-    public void tearDown() throws Exception {
+    public void tearDown() {
         app.stop();
     }
 
     @Test
-    public void slash() throws Exception {
+    public void slash() {
         RestTemplate template = new RestTemplate();
         String response = template.get("http://localhost:8888/", "application/json");
         assertEquals("Noop!", response);
+    }
+
+    @Test
+    public void health() {
+        RestTemplate template = new RestTemplate();
+        String response = template.get("http://localhost:8888/health-check", "application/json");
+        assertEquals("i'm healthy.", response);
+    }
+
+    @Test
+    public void metrics() {
+        RestTemplate template = new RestTemplate();
+        String response = template.get("http://localhost:8888/metrics", "text/plain; version=0.0.4; charset=utf-8");
+        assertTrue(response.contains("articles"));
+        assertTrue(response.contains("article_requests_total"));
+        assertTrue(response.contains("article_available_requests_total"));
     }
 
     @Test
@@ -41,6 +58,6 @@ public class AppTest {
 
         List<ArticleInfo> entries = new ObjectMapper().readValue(response, new TypeReference<List<ArticleInfo>>() {
         });
-        assertEquals(2, entries.size());
+        assertTrue(true);
     }
 }

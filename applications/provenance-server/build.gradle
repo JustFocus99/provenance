@@ -4,6 +4,7 @@ dependencies {
     implementation project(":components:articles")
     implementation project(":components:endpoints")
 
+    implementation project(":components:metrics-support")
     implementation project(":components:rest-support")
     implementation project(":components:workflow-support")
 }

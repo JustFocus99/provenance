@@ -10,9 +10,9 @@ import org.apache.http.impl.client.HttpClients
 import org.apache.http.message.BasicNameValuePair
 
 open class RestTemplate {
-    open fun get(endpoint: String, accept: String, vararg queryParams: BasicNameValuePair) = execute {
+    open fun get(endpoint: String, accept: String, vararg pairs: BasicNameValuePair) = execute {
         val builder = URIBuilder(endpoint)
-        queryParams.forEach { pair -> builder.addParameter(pair.name, pair.value) }
+        pairs.forEach { pair -> builder.addParameter(pair.name, pair.value) }
         HttpGet(builder.build()).apply {
             addHeader("Accept", accept)
         }

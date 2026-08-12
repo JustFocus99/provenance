@@ -4,7 +4,7 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-class WorkScheduler<T> @JvmOverloads constructor(private val finder: WorkFinder<T>, private val workers: List<Worker<T>>, private val delay: Long = 10L) {
+class WorkScheduler<T>(private val finder: WorkFinder<T>, private val workers: MutableList<Worker<T>>, private val delay: Long = 10L) {
     private val logger = LoggerFactory.getLogger(this.javaClass)
 
     private val pool = Executors.newScheduledThreadPool(workers.size)
