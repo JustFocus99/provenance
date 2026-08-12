@@ -6,3 +6,8 @@ out
 *.ipr
 *.iws
 .DS_Store
+
+# Local Prometheus install (see README) — binary, config, and runtime data, not source
+prometheus.exe
+prometheus.yml
+data/
